@@ -51,3 +51,15 @@ $ sudo nano [user_home_dir_path]/.ssh/authorized_keys
 ```
 $ sudo systemctl reload sshd
 ```
+
+## Apache, PHP, MySQL
+```
+$ sudo apt-get update
+
+$ sudo apt-get install apache2
+
+$ sudo apt-get install mysql-server
+$ sudo mysql_secure_installation
+
+$ sudo apt install php
+```

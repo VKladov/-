@@ -1,0 +1,10 @@
+{
+  "name": "cable-journal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DWG -> JSON conversion for the cable journal scripts",
+  "type": "module",
+  "dependencies": {
+    "@mlightcad/libredwg-web": "0.7.14"
+  }
+}

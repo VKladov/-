@@ -7,7 +7,7 @@ import networkx as nx
 
 import geom
 from analyze import analyze
-from config import CABLES, DROPS, GROUPS_JSON, RESERVE
+from config import CABLES, GROUPS_JSON, cable_length
 from geom import pt_seg_dist
 from rooms import room_of, rooms_display
 
@@ -164,16 +164,10 @@ def emergency_lines():
     return out
 
 
-def length(g):
-    drops = (g['n_panel'] * DROPS['panel'] + g['n_sock'] * DROPS['socket'] + g['n_sw'] * DROPS['switch']
-             + g['n_lum'] * DROPS['luminaire'])
-    return round((g['horiz'] + drops) * (1 + RESERVE), 2)
-
-
 if __name__ == '__main__':
     groups = socket_lines() + ac_lines() + lighting_lines() + emergency_lines()
     json.dump(groups, open(GROUPS_JSON, 'w'), ensure_ascii=False, indent=1)
     for g in groups:
         print(f"{g['des']:6} {g['end'][:24]:24} {g['consumers'][:50]:50} трасса {g['horiz']:6.2f}  "
-              f"итого {length(g):6.2f} м")
-    print(f"ВСЕГО {sum(length(g) for g in groups):.2f} м, линий {len(groups)} -> {GROUPS_JSON}")
+              f"итого {cable_length(g):6.2f} м")
+    print(f"ВСЕГО {sum(cable_length(g) for g in groups):.2f} м, линий {len(groups)} -> {GROUPS_JSON}")

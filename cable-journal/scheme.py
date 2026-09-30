@@ -11,16 +11,14 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.patches import Rectangle
 
 import label_offsets as LO
-from config import DROPS, GROUPS_JSON, RESERVE, fmt_num
+from config import GROUPS_JSON, cable_length
 from geom import db, symbols, PANEL, decor
 from rooms import ROOM_NAMES
 
 plt.rcParams['font.family'] = 'DejaVu Sans'
 groups = json.load(open(GROUPS_JSON))
 for g in groups:
-    drops = (g['n_panel'] * DROPS['panel'] + g['n_sock'] * DROPS['socket'] + g['n_sw'] * DROPS['switch']
-             + g['n_lum'] * DROPS['luminaire'])
-    g['total'] = round((g['horiz'] + drops) * (1 + RESERVE), 2)
+    g['total'] = cable_length(g)
 PREVIEW_DIR = os.environ.get('PREVIEW_DIR')     # set to also save PNG previews of the pages
 
 def fmt(x):
@@ -182,10 +180,7 @@ def page(pdf, title, sel, label_off=None, png=None):
                     zorder=8, bbox=dict(boxstyle='round,pad=0.25', facecolor='white', edgecolor=col, lw=1.2))
     fig.text(0.015, 0.972, title, fontsize=15, weight='bold')
     fig.text(0.015, 0.958, 'К кабельному журналу. Номера групп условные (на чертеже их нет), '
-             'названия помещений — по данным заказчика.\n'
-             f"Длины: трасса по плану + спуски (щиток {fmt_num(DROPS['panel'])} м, розетка {fmt_num(DROPS['socket'])} м, "
-             f"выключатель {fmt_num(DROPS['switch'])} м, светильник {fmt_num(DROPS['luminaire'])} м), "
-             + ('без запаса.' if not RESERVE else f'с запасом {fmt_num(RESERVE * 100)} %.'),
+             'названия помещений — по данным заказчика.\nДлины кабеля — как в кабельном журнале.',
              fontsize=9.5, color='#333333', va='top')
     # legend table
     n = len(sel)

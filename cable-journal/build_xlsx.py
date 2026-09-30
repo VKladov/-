@@ -7,9 +7,10 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.worksheet.page import PageMargins
 
-from config import DROPS, GROUPS_JSON, NOTES_JSON, RESERVE
+from config import DROPS, GROUPS_JSON, LENGTH_FACTOR, NOTES_JSON, r2
 
 OUT = sys.argv[1]
+FACTOR = f'*{LENGTH_FACTOR:g}' if LENGTH_FACTOR != 1 else ''   # every length is multiplied by it
 groups = json.load(open(GROUPS_JSON))
 notes = json.load(open(NOTES_JSON))
 
@@ -35,6 +36,7 @@ wrap_l = Alignment(horizontal='left', vertical='center', wrap_text=True)
 right = Alignment(horizontal='right', vertical='center')
 center = Alignment(horizontal='center', vertical='center')
 
+
 # ---- column map of the journal ----
 C_NO, C_DES, C_FROM, C_TO, C_CONS, C_BRAND, C_CORES = 'A', 'B', 'C', 'D', 'E', 'F', 'G'
 C_H, C_NP, C_NS, C_NW, C_NL, C_DROPS, C_LEN, C_NOTE = 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O'
@@ -56,7 +58,7 @@ for c, w in widths.items():
 ws['A1'] = 'КАБЕЛЬНЫЙ ЖУРНАЛ'
 ws['A1'].font = f_title
 ws.merge_cells('A1:O1')
-ws['A2'] = ('Составлен по присланному чертежу DWG (план этажа). Длина кабеля = трасса по плану + спуски, в метрах. '
+ws['A2'] = ('Составлен по присланному чертежу DWG (план этажа). Длина кабеля = горизонтальная трасса + спуски, в метрах. '
             'Номера групп условные (на чертеже их нет) и совпадают со «Схемой групп» (PDF); названия помещений — по данным заказчика.')
 ws['A2'].font = f_sub
 ws['A2'].alignment = Alignment(wrap_text=True, vertical='top')
@@ -72,7 +74,6 @@ params = [
     ('Спуск к выключателю, м', DROPS['switch'], 'задано заказчиком; 1 спуск на каждый выключатель'),
     ('Спуск к светильнику, м', DROPS['luminaire'],
      'задано заказчиком; 1 спуск от каждой коробки-светильника (квадрат с диагональю)'),
-    ('Запас к длине кабеля', RESERVE, 'по умолчанию 0 %; при необходимости укажите, например 10 %'),
 ]
 P0 = 4
 for i, (lab, val, note) in enumerate(params):
@@ -80,9 +81,10 @@ for i, (lab, val, note) in enumerate(params):
     ws.cell(r, 3, lab).font = f_txt
     c = ws.cell(r, 4, val)
     c.font = f_in; c.fill = fill_par; c.border = border; c.alignment = Alignment(horizontal='center')
-    c.number_format = '0%' if i == len(params) - 1 else '0.00'
+    c.number_format = '0.00'
     ws.cell(r, 5, note).font = f_sub
-P_PANEL, P_SOCK, P_SW, P_LUM, P_RES = (f'$D${P0 + i}' for i in range(5))
+P_PANEL, P_SOCK, P_SW, P_LUM = (f'$D${P0 + i}' for i in range(4))
+DROP_COLS = ((C_NP, P_PANEL), (C_NS, P_SOCK), (C_NW, P_SW), (C_NL, P_LUM))
 
 ws['H4'] = 'Условные обозначения:'
 ws['H4'].font = f_bold
@@ -101,7 +103,7 @@ H1, H2, HN = 10, 11, 12
 hdr = [
     (C_NO, '№ п/п', None), (C_DES, 'Обозначение кабеля', None), (C_FROM, 'Трасса', 'Начало'), (C_TO, None, 'Конец'),
     (C_CONS, 'Потребители', None), (C_BRAND, 'Кабель', 'Марка'), (C_CORES, None, 'Кол-во и сечение жил, мм²'),
-    (C_H, 'Горизонтальная трасса по плану, м', None), (C_NP, 'Количество спусков, шт.', 'к щитку'),
+    (C_H, 'Горизонтальная трасса, м', None), (C_NP, 'Количество спусков, шт.', 'к щитку'),
     (C_NS, None, 'к розеткам'), (C_NW, None, 'к выключателям'), (C_NL, None, 'к светильникам'),
     (C_DROPS, 'Спуски, м', None), (C_LEN, 'Длина кабеля, м', None), (C_NOTE, 'Примечание', None),
 ]
@@ -162,11 +164,10 @@ for sec in sections:
         n_pp += 1
         vals = {
             C_NO: n_pp, C_DES: g['des'], C_FROM: g['start'], C_TO: g['end'], C_CONS: g['consumers'],
-            C_BRAND: g['cable'], C_CORES: g['cores'], C_H: g['horiz'],
+            C_BRAND: g['cable'], C_CORES: g['cores'], C_H: r2(g['horiz'] * LENGTH_FACTOR),
             C_NP: g['n_panel'], C_NS: g['n_sock'], C_NW: g['n_sw'], C_NL: g['n_lum'],
-            C_DROPS: (f'={C_NP}{row}*{P_PANEL}+{C_NS}{row}*{P_SOCK}+{C_NW}{row}*{P_SW}'
-                      f'+{C_NL}{row}*{P_LUM}'),
-            C_LEN: f'=ROUND(({C_H}{row}+{C_DROPS}{row})*(1+{P_RES}),2)',
+            C_DROPS: '=' + '+'.join(f'ROUND({cnt}{row}*{par}{FACTOR},2)' for cnt, par in DROP_COLS),
+            C_LEN: f'={C_H}{row}+{C_DROPS}{row}',
             C_NOTE: g['note'] or None,
         }
         for col, v in vals.items():
@@ -227,7 +228,7 @@ s2 = wb.create_sheet('Сводка')
 for c, w in {'A': 26, 'B': 16, 'C': 12, 'D': 16, 'E': 13, 'F': 15, 'G': 18}.items():
     s2.column_dimensions[c].width = w
 s2['A1'] = 'Сводка по кабелю'; s2['A1'].font = f_title
-s2['A2'] = ('Все значения — формулы от листа «Кабельный журнал»: при изменении спусков, запаса, марки или сечения '
+s2['A2'] = ('Все значения — формулы от листа «Кабельный журнал»: при изменении спусков, марки или сечения '
             'сводка пересчитается.')
 s2['A2'].font = f_sub
 
@@ -321,24 +322,24 @@ for rr in range(sys_first, r + 1):
 r += 2
 s2.cell(r, 1, '3. Спуски').font = f_bold
 r += 1
-table_header(s2, r, ['Вид спуска', 'Кол-во, шт.', 'Длина одного, м', 'Всего, м'])
+table_header(s2, r, ['Вид спуска', 'Кол-во, шт.', 'Всего, м'])
 r += 1
 sp_first = r
 for lab, col, par in (('К щитку', C_NP, P_PANEL), ('К розеткам', C_NS, P_SOCK),
                       ('К выключателям', C_NW, P_SW), ('К светильникам', C_NL, P_LUM)):
     s2.cell(r, 1, lab)
     s2.cell(r, 2, f'={JS}!{col}{TOT}')
-    s2.cell(r, 3, f'={JS}!{par.replace("$", "")}')
-    s2.cell(r, 4, f'=B{r}*C{r}')
+    # same rounding as in the journal rows, over data rows only (they have a number in column A)
+    s2.cell(r, 3, f'=SUMPRODUCT(ISNUMBER({rng(C_NO)})*ROUND({rng(col)}*{JS}!{par}{FACTOR},2))')
     r += 1
 s2.cell(r, 1, 'Итого')
 s2[f'B{r}'] = f'=SUM(B{sp_first}:B{r - 1})'
-s2[f'D{r}'] = f'=SUM(D{sp_first}:D{r - 1})'
+s2[f'C{r}'] = f'=SUM(C{sp_first}:C{r - 1})'
 for rr in range(sp_first, r + 1):
-    for cc in range(1, 5):
+    for cc in range(1, 4):
         c = s2.cell(rr, cc)
         c.border = border
-        c.font = f_bold if rr == r else (f_link if cc in (2, 3) else f_txt)
+        c.font = f_bold if rr == r else (f_link if cc == 2 else f_txt)
         if cc > 1:
             c.number_format = '0' if cc == 2 else '0.00'
             c.alignment = right

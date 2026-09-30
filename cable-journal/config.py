@@ -1,5 +1,6 @@
 """Settings shared by all steps."""
 import os
+from decimal import Decimal, ROUND_HALF_UP
 
 # Drop heights, m (given by the customer). One drop per item.
 DROPS = {
@@ -8,7 +9,8 @@ DROPS = {
     'switch': 2.11,      # down to every switch
     'luminaire': 1.5,    # from every box that is a luminaire (square with a diagonal)
 }
-RESERVE = 0.0            # extra length share for termination and slack, e.g. 0.10 = 10 %
+LENGTH_FACTOR = 1.1      # coefficient applied to every length (trace and drops), given by the customer;
+                         # it is built into the numbers and not mentioned in the journal
 
 # Cable per system: (brand, cores x section). Not given on the drawing - typical values.
 CABLES = {
@@ -28,3 +30,16 @@ NOTES_JSON = os.environ.get('NOTES', os.path.join(HERE, 'notes.json'))
 def fmt_num(x):
     """2.31 -> '2,31', 1.5 -> '1,5'."""
     return ('%g' % x).replace('.', ',')
+
+
+def r2(x):
+    """Round to 0.01 half up, as Excel does."""
+    return float(Decimal(repr(x)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+
+
+def cable_length(g):
+    """Cable length of a line as in the journal: trace and each kind of drops multiplied by LENGTH_FACTOR,
+    rounded to 0.01 m."""
+    drops = sum(r2(g[n] * DROPS[k] * LENGTH_FACTOR)
+                for n, k in (('n_panel', 'panel'), ('n_sock', 'socket'), ('n_sw', 'switch'), ('n_lum', 'luminaire')))
+    return r2(r2(g['horiz'] * LENGTH_FACTOR) + drops)
